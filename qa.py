@@ -9,14 +9,15 @@ https://medium.com/@o39joey/introduction-to-rag-with-python-langchain-62beeb5719
 
 import os
 from pathlib import Path
+import shutil
 
 from dotenv import load_dotenv
 from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-from langchain_core.prompts import PromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_text_splitters import CharacterTextSplitter, RecursiveCharacterTextSplitter
 from langchain_unstructured import UnstructuredLoader
 from langchain_community.document_loaders import DirectoryLoader, TextLoader
 
@@ -25,7 +26,7 @@ from langchain_community.document_loaders import DirectoryLoader, TextLoader
 embedding_model = "text-embedding-3-small"
 chat_model = "gpt-4o-mini"
 ALINE = "*" * 50
-
+persist_dir = Path(__file__).resolve().parent / "data/chroma"
 
 
 def main():
@@ -39,10 +40,9 @@ def main():
 
     bibleChunks = BuildBibleChunks()
     print(f"Bible Chunks: {len(bibleChunks)}")
-    print("First Bible Chunk:\n", bibleChunks[0])
     print(ALINE)
-
-    return 
+    print()
+    print()
 
 
     embeddings = OpenAIEmbeddings(
@@ -51,16 +51,26 @@ def main():
         max_retries=3,
     )
 
-    vectorStore = Chroma(
+    if os.path.exists(persist_dir):
+        shutil.rmtree(persist_dir)
+
+        
+
+    db = Chroma.from_documents(
+        documents=bibleChunks,
+        embedding=embeddings,
         collection_name="NIV2",
-        embedding_function=embeddings,
+        persist_directory=str(persist_dir),
     )
-
-    ids = vectorStore.add_documents(bibleChunks)
-    print("Added documents to vector store with IDs:\n", ids)
+    print("Documents added to Chroma vector store.")
+    
     print(ALINE) 
+    print(ALINE)
+    print("Vector store setup complete.")
 
 
+
+    return 
 
     results = vectorStore.similarity_search("Where was Jesus born?", k=8)
     print("Similarity Search Results:\n", results)
@@ -153,27 +163,26 @@ def BuildBibleChunks():
         use_multithreading=True,
     ) 
 
-    #loader = UnstructuredLoader(str(source_dir))
+    
 
     documents = loader.load()
 
     if not documents:
         raise ValueError(f"No markdown files found under {source_dir}")
 
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1400,
+        chunk_overlap=200,
+        length_function=len,
+        add_start_index=True,
+    )
+
     for document in documents:
         source = Path(document.metadata.get("source", ""))
         document.metadata["book_file"] = source.name
         document.metadata["relative_path"] = source.as_posix()
 
-
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1400,
-            chunk_overlap=200,
-            length_function=len,
-            add_start_index=True,
-        )
-        docChunks = splitter.split_documents(documents)
-        chunks.extend(docChunks)
+    chunks.extend(splitter.split_documents(documents))
 
     return chunks
 
