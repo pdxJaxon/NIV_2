@@ -38,11 +38,7 @@ def main():
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY is not set. Check your .env file.")
 
-    bibleChunks = BuildBibleChunks()
-    print(f"Bible Chunks: {len(bibleChunks)}")
-    print(ALINE)
-    print()
-    print()
+    
 
 
     embeddings = OpenAIEmbeddings(
@@ -52,38 +48,38 @@ def main():
     )
 
     if os.path.exists(persist_dir):
-        shutil.rmtree(persist_dir)
+        print(f"Persist directory {persist_dir} already exists.")
+        db = Chroma(
+            collection_name="NIV2",
+            persist_directory=str(persist_dir),
+            embedding_function=embeddings,
+        )
+    else:
+        bibleChunks = BuildBibleChunks()
+        print(f"Bible Chunks: {len(bibleChunks)}")
+        print(ALINE)
+        print()
+        print()
 
+        db = Chroma.from_documents(
+            documents=bibleChunks,
+            embedding=embeddings,
+            collection_name="NIV2",
+            persist_directory=str(persist_dir),
+        )
+        print("Documents added to Chroma vector store.")
         
+        print(ALINE) 
+        print(ALINE)
+        print("Vector store setup complete.")
 
-    db = Chroma.from_documents(
-        documents=bibleChunks,
-        embedding=embeddings,
-        collection_name="NIV2",
-        persist_directory=str(persist_dir),
-    )
-    print("Documents added to Chroma vector store.")
+
+
+   # results = db.similarity_search("Where was Jesus born?", k=8)
     
-    print(ALINE) 
-    print(ALINE)
-    print("Vector store setup complete.")
 
 
-
-    return 
-
-    results = vectorStore.similarity_search("Where was Jesus born?", k=8)
-    print("Similarity Search Results:\n", results)
-    print(ALINE)
-    for r in results:
-        print(r.page_content)
-        print(ALINE)    
-
-    print("DONE")
-
-
-
-    retriever = vectorStore.as_retriever(search_kwargs={"k": 8})
+    retriever = db.as_retriever(search_kwargs={"k": 8})
 
     llm = ChatOpenAI(model=chat_model, openai_api_key=api_key, temperature=0)
 
@@ -94,8 +90,7 @@ def main():
 
     customRagPrompt = PromptTemplate.from_template(promptTemplate)
 
-    print("Prompt Template\n",promptTemplate)
-    print(ALINE)
+
 
     ragChain = (
         {
@@ -106,10 +101,11 @@ def main():
         | StrOutputParser()
     )
 
-    print("RagChain\n",ragChain)
-    print(ALINE)
+    
 
-    s = ragChain.invoke("Where was Jesus born?")
+    q=input("Enter your question: ")
+
+    s = ragChain.invoke(q)
 
     print("Answer:\n")
     print(s)
