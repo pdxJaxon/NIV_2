@@ -2,3 +2,5 @@
 .env 
 .venv/
 __pychache__/
+data/chroma/
+data/*.txt
